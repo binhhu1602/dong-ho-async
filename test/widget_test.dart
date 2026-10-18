@@ -11,6 +11,6 @@ void main() {
     expect(find.text('Future & Stream – Đồng hồ'), findsOneWidget);
     expect(find.text('Thêm đồng hồ'), findsOneWidget);
     expect(find.text('Chạy thử Event Loop'), findsOneWidget);
-    expect(find.text('Nhật ký:'), findsOneWidget);
+    expect(find.text('Nhật ký hoạt động:'), findsOneWidget);
   });
 }
