@@ -29,9 +29,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ScrollController _logScrollController = ScrollController();
+
+  // Cuộn xuống dòng nhật ký mới nhất
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_logScrollController.hasClients) {
+        _logScrollController.animateTo(
+          _logScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   // Demo thứ tự chạy: Code đồng bộ -> Microtask Queue -> Event Queue
   void _runEventLoopDemo() {
-    appLogs.clear();
     log('--- THỬ NGHIỆM EVENT LOOP ---');
     log('1. Code đồng bộ: bắt đầu');
 
@@ -47,13 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Chờ các hàng đợi chạy xong rồi cập nhật giao diện
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        _scrollToBottom();
+      }
     });
   }
 
   // Chuyển sang màn hình đồng hồ
   Future<void> _openStopwatches() async {
-    appLogs.clear();
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     // Chờ người dùng thoát màn hình đồng hồ quay về
     await Navigator.push(
@@ -61,8 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const StopwatchScreen()),
     );
 
-    // Cập nhật lại giao diện để xem nhật ký dọn dẹp
-    if (mounted) setState(() {});
+    // Cập nhật lại giao diện để xem nhật ký và xóa thông báo cũ
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      setState(() {});
+      _scrollToBottom();
+    }
+  }
+
+  @override
+  void dispose() {
+    _logScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -86,28 +113,52 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Chạy thử Event Loop'),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Nhật ký:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Nhật ký:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                if (appLogs.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        appLogs.clear();
+                      });
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Xóa nhật ký'),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(10),
                 color: Colors.black87,
-                child: ListView(
-                  children: [
-                    for (final line in appLogs)
-                      Text(
-                        line,
-                        style: const TextStyle(
-                          color: Colors.greenAccent,
-                          fontFamily: 'monospace',
-                          fontSize: 13,
+                child: appLogs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Chưa có nhật ký nào. Hãy bấm các nút phía trên để thử nghiệm!',
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          textAlign: TextAlign.center,
                         ),
+                      )
+                    : ListView(
+                        controller: _logScrollController,
+                        children: [
+                          for (final line in appLogs)
+                            Text(
+                              line,
+                              style: const TextStyle(
+                                color: Colors.greenAccent,
+                                fontFamily: 'monospace',
+                                fontSize: 13,
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
               ),
             ),
           ],

@@ -13,23 +13,21 @@ class StopwatchScreen extends StatefulWidget {
 }
 
 class _StopwatchScreenState extends State<StopwatchScreen> {
-  final List<StopwatchTask> _tasks = [];
+  // Danh sách đồng hồ được lưu dùng chung để không bị mất khi thoát ra vào lại
+  List<StopwatchTask> get _tasks => appStopwatchTasks;
 
-  // Lưu subscription thông báo của từng đồng hồ để hủy khi cần
+  // Quản lý subscription thông báo của từng đồng hồ
   final Map<StopwatchTask, StreamSubscription<int>> _alertSubs = {};
 
-  // Stream cho ô tìm kiếm
   final StreamController<String> _searchController = StreamController<String>();
   StreamSubscription<String>? _searchSub;
   String _query = '';
 
   bool _adding = false;
-  int _counter = 0;
 
   @override
   void initState() {
     super.initState();
-    log('Mở màn hình đồng hồ');
 
     // Lắng nghe dữ liệu ô tìm kiếm: chuẩn hóa chữ và áp dụng debounce 400ms
     _searchSub = _searchController.stream
@@ -40,31 +38,25 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
       setState(() => _query = text);
     });
 
-    // Thêm đồng hồ đầu tiên khi mở màn hình
-    _addStopwatch();
+    // Nếu chưa có đồng hồ nào thì tự động tạo Đồng hồ 1
+    if (_tasks.isEmpty) {
+      _addStopwatch();
+    } else {
+      // Gắn lắng nghe thông báo mốc 10s cho các đồng hồ đang có
+      for (final task in _tasks) {
+        _listenToAlert(task);
+      }
+    }
   }
 
-  // Thêm đồng hồ mới (giả lập tác vụ bất đồng bộ mất 0.5s)
-  Future<void> _addStopwatch() async {
-    setState(() => _adding = true);
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Kiểm tra xem màn hình còn hiển thị hay không trước khi gọi setState
-    if (!mounted) {
-      log('Màn hình đã đóng trước khi tạo xong đồng hồ');
-      return;
-    }
-
-    _counter++;
-    final task = StopwatchTask('Đồng hồ $_counter');
-
-    // Lắng nghe broadcast stream để hiển thị thông báo mỗi khi đồng hồ chạy được 10s
+  // Lắng nghe broadcast stream để cảnh báo mốc 10 giây
+  void _listenToAlert(StopwatchTask task) {
     _alertSubs[task] = task.stream
         .map((d) => d.inSeconds)
         .distinct()
         .where((s) => s > 0 && s % 10 == 0)
         .listen((s) {
+      log('[${task.name}] Cảnh báo Stream: đã chạy mốc $s giây');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -73,52 +65,71 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
         ),
       );
     });
+  }
+
+  // Thêm đồng hồ mới (giả lập tác vụ bất đồng bộ mất 0.5s)
+  Future<void> _addStopwatch() async {
+    setState(() => _adding = true);
+
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+
+    appStopwatchCounter++;
+    final task = StopwatchTask('Đồng hồ $appStopwatchCounter');
+    _listenToAlert(task);
 
     setState(() {
       _tasks.add(task);
       _adding = false;
     });
-    log('Đã thêm ${task.name}');
+    log('Đã tạo xong ${task.name} và mở Broadcast Stream');
   }
 
-  // Xóa một đồng hồ khỏi danh sách
+  // Xóa một đồng hồ khỏi danh sách và hủy luồng an toàn
   void _removeStopwatch(StopwatchTask task) {
-    // Hủy lắng nghe thông báo mốc 10s
     final sub = _alertSubs.remove(task);
     if (sub != null) {
       sub.cancel();
     }
 
-    // Tắt Timer và đóng Stream của đồng hồ
     task.dispose();
+    log('[${task.name}] Đã xóa khỏi danh sách');
 
     setState(() {
       _tasks.remove(task);
     });
   }
 
-  // Hủy luồng an toàn khi thoát khỏi màn hình
-  @override
-  void dispose() {
-    log('Thoát màn hình: bắt đầu dọn dẹp tài nguyên');
-
-    // 1. Hủy lắng nghe ô tìm kiếm
-    _searchSub?.cancel();
-
-    // 2. Đóng StreamController ô tìm kiếm
-    _searchController.close();
-
-    // 3. Hủy các subscription lắng nghe thông báo
+  // Hủy tất cả đồng hồ và dọn dẹp bộ nhớ an toàn
+  void _clearAllStopwatches() {
     for (final sub in _alertSubs.values) {
       sub.cancel();
     }
+    _alertSubs.clear();
 
-    // 4. Hủy Timer và đóng Stream của từng đồng hồ
-    for (final task in _tasks) {
-      task.dispose();
+    disposeAllStopwatches();
+
+    setState(() {});
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đã hủy an toàn toàn bộ luồng đồng hồ'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchSub?.cancel();
+    _searchController.close();
+
+    for (final sub in _alertSubs.values) {
+      sub.cancel();
     }
+    _alertSubs.clear();
 
-    log('Dọn dẹp hoàn tất: không còn Stream hay Timer nào chạy ngầm');
     super.dispose();
   }
 
@@ -127,50 +138,65 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
     final visible =
         _tasks.where((t) => t.name.toLowerCase().contains(_query)).toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nhiều đồng hồ bấm giờ')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _adding ? null : _addStopwatch,
-        icon: _adding
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.add),
-        label: Text(_adding ? 'Đang tạo…' : 'Thêm đồng hồ'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Tìm đồng hồ (VD: 2)',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Nhiều đồng hồ bấm giờ'),
+          actions: [
+            if (_tasks.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.delete_sweep),
+                tooltip: 'Hủy và dọn dẹp tất cả đồng hồ',
+                onPressed: _clearAllStopwatches,
               ),
-              onChanged: (text) {
-                // Đẩy ký tự vừa gõ vào Stream
-                _searchController.add(text);
-              },
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _adding ? null : _addStopwatch,
+          icon: _adding
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.add),
+          label: Text(_adding ? 'Đang tạo…' : 'Thêm đồng hồ'),
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Tìm đồng hồ (VD: 2)',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (text) {
+                  _searchController.add(text);
+                },
+              ),
             ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 80),
-              children: [
-                for (final task in visible)
-                  StopwatchCard(
-                    key: ValueKey(task.name),
-                    task: task,
-                    onChanged: () => setState(() {}),
-                    onDelete: () => _removeStopwatch(task),
-                  ),
-              ],
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 80),
+                children: [
+                  for (final task in visible)
+                    StopwatchCard(
+                      key: ValueKey(task.name),
+                      task: task,
+                      onChanged: () => setState(() {}),
+                      onDelete: () => _removeStopwatch(task),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
