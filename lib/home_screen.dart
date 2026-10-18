@@ -62,9 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Lắng nghe broadcast stream để cảnh báo mốc 10 giây
   void _listenToAlert(StopwatchTask task) {
+    // Bỏ qua giây hiện tại lúc bắt đầu nghe, tránh báo lại mốc đã qua khi mở lại màn hình
+    final startSecond = task.elapsed.inSeconds;
     _alertSubs[task] = task.stream
         .map((d) => d.inSeconds)
         .distinct()
+        .skipWhile((s) => s == startSecond)
         .where((s) => s > 0 && s % 10 == 0)
         .listen((s) {
       if (!mounted) return;
@@ -92,12 +95,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
-    appStopwatchCounter++;
-    final task = StopwatchTask('Đồng hồ $appStopwatchCounter');
+    // Lấy số nhỏ nhất chưa dùng (VD: đang có 1 2 3 5 6 → đồng hồ mới là số 4)
+    int number = 1;
+    while (_tasks.any((t) => t.name == 'Đồng hồ $number')) {
+      number++;
+    }
+    final task = StopwatchTask('Đồng hồ $number');
     _listenToAlert(task);
 
     setState(() {
-      _tasks.add(task);
+      // Chèn đúng vị trí để danh sách luôn theo thứ tự 1 2 3 4 5 6
+      _tasks.insert(number - 1, task);
       _adding = false;
     });
     log('Đã tạo xong ${task.name} và mở Broadcast Stream');
@@ -371,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             for (final task in visibleTasks)
                               StopwatchCard(
-                                key: ValueKey(task.name),
+                                key: ObjectKey(task),
                                 task: task,
                                 onChanged: () {
                                   setState(() {});

@@ -6,9 +6,6 @@ final List<String> appLogs = [];
 // Danh sách các đồng hồ trong ứng dụng (giữ trạng thái khi chuyển màn hình)
 final List<StopwatchTask> appStopwatchTasks = [];
 
-// Biến đếm số lượng đồng hồ đã tạo
-int appStopwatchCounter = 0;
-
 // Ghi nhật ký có kèm mốc thời gian giờ:phút:giây
 void log(String message) {
   final now = DateTime.now();
