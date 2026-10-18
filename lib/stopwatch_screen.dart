@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'stopwatch_task.dart';
 
-// =============================================================================
-// MÀN HÌNH NHIỀU ĐỒNG HỒ (đa tác vụ)
-// =============================================================================
+// Màn hình quản lý danh sách nhiều đồng hồ bấm giờ
 class StopwatchScreen extends StatefulWidget {
   const StopwatchScreen({super.key});
 
@@ -17,10 +15,10 @@ class StopwatchScreen extends StatefulWidget {
 class _StopwatchScreenState extends State<StopwatchScreen> {
   final List<StopwatchTask> _tasks = [];
 
-  // Mỗi đồng hồ có 1 subscription "cảnh báo mốc 10 giây" → phải tự hủy.
+  // Lưu subscription thông báo của từng đồng hồ để hủy khi cần
   final Map<StopwatchTask, StreamSubscription<int>> _alertSubs = {};
 
-  // Stream cho ô tìm kiếm (người gõ → đẩy chữ vào đây).
+  // Stream cho ô tìm kiếm
   final StreamController<String> _searchController = StreamController<String>();
   StreamSubscription<String>? _searchSub;
   String _query = '';
@@ -31,44 +29,43 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
   @override
   void initState() {
     super.initState();
-    log('▶ Mở màn hình đồng hồ');
+    log('Mở màn hình đồng hồ');
 
-    // TRANSFORM + DEBOUNCE:
-    // chữ gõ vào → map (bỏ khoảng trắng, viết thường) → debounce 400ms → lọc.
+    // Lắng nghe dữ liệu ô tìm kiếm: chuẩn hóa chữ và áp dụng debounce 400ms
     _searchSub = _searchController.stream
         .map((text) => text.trim().toLowerCase())
         .transform(debounce(const Duration(milliseconds: 400)))
         .listen((text) {
-      log('🔍 Debounce xong, lọc theo: "$text"');
+      log('Đã debounce, tìm kiếm theo: "$text"');
       setState(() => _query = text);
     });
 
+    // Thêm đồng hồ đầu tiên khi mở màn hình
     _addStopwatch();
   }
 
-  // FUTURE + ASYNC/AWAIT: giả lập việc tạo đồng hồ mất 0,5 giây.
+  // Thêm đồng hồ mới (giả lập tác vụ bất đồng bộ mất 0.5s)
   Future<void> _addStopwatch() async {
     setState(() => _adding = true);
 
-    await Future.delayed(const Duration(milliseconds: 500)); // chờ, không đơ app
+    await Future.delayed(const Duration(milliseconds: 500));
 
-    // Trong lúc chờ, người dùng có thể đã thoát màn hình!
-    // Nếu vậy thì dừng lại, không gọi setState (sẽ báo lỗi).
+    // Kiểm tra xem màn hình còn hiển thị hay không trước khi gọi setState
     if (!mounted) {
-      log('⚠ Màn hình đã đóng trong lúc await → bỏ qua');
+      log('Màn hình đã đóng trước khi tạo xong đồng hồ');
       return;
     }
 
     _counter++;
     final task = StopwatchTask('Đồng hồ $_counter');
 
-    // BROADCAST: đây là listener THỨ HAI trên cùng stream (listener thứ nhất
-    // là StreamBuilder hiển thị số). Stream thường sẽ báo lỗi ở đây.
+    // Lắng nghe broadcast stream để hiển thị thông báo mỗi khi đồng hồ chạy được 10s
     _alertSubs[task] = task.stream
-        .map((d) => d.inSeconds) // Duration → số giây
-        .distinct() // bỏ các giá trị trùng (mỗi giây chỉ giữ 1 lần)
-        .where((s) => s > 0 && s % 10 == 0) // chỉ lấy mốc 10, 20, 30…
+        .map((d) => d.inSeconds)
+        .distinct()
+        .where((s) => s > 0 && s % 10 == 0)
         .listen((s) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('⏰ ${task.name} đã chạy $s giây'),
@@ -81,28 +78,47 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
       _tasks.add(task);
       _adding = false;
     });
-    log('➕ Thêm ${task.name}');
+    log('Đã thêm ${task.name}');
   }
 
+  // Xóa một đồng hồ khỏi danh sách
   void _removeStopwatch(StopwatchTask task) {
-    _alertSubs.remove(task)?.cancel(); // hủy listener cảnh báo
-    task.dispose(); // tắt Timer, đóng Stream
-    setState(() => _tasks.remove(task));
+    // Hủy lắng nghe thông báo mốc 10s
+    final sub = _alertSubs.remove(task);
+    if (sub != null) {
+      sub.cancel();
+    }
+
+    // Tắt Timer và đóng Stream của đồng hồ
+    task.dispose();
+
+    setState(() {
+      _tasks.remove(task);
+    });
   }
 
-  // HỦY LUỒNG AN TOÀN KHI THOÁT MÀN HÌNH
+  // Hủy luồng an toàn khi thoát khỏi màn hình
   @override
   void dispose() {
-    log('◀ Thoát màn hình → bắt đầu dọn dẹp');
-    _searchSub?.cancel(); // 1. hủy nghe ô tìm kiếm
-    _searchController.close(); // 2. đóng stream tìm kiếm
+    log('Thoát màn hình: bắt đầu dọn dẹp tài nguyên');
+
+    // 1. Hủy lắng nghe ô tìm kiếm
+    _searchSub?.cancel();
+
+    // 2. Đóng StreamController ô tìm kiếm
+    _searchController.close();
+
+    // 3. Hủy các subscription lắng nghe thông báo
     for (final sub in _alertSubs.values) {
-      sub.cancel(); // 3. hủy các listener cảnh báo
+      sub.cancel();
     }
+
+    // 4. Hủy Timer và đóng Stream của từng đồng hồ
     for (final task in _tasks) {
-      task.dispose(); // 4. tắt Timer + đóng Stream của từng đồng hồ
+      task.dispose();
     }
-    log('✅ Dọn dẹp xong, không còn Timer nào chạy');
+
+    log('Dọn dẹp hoàn tất: không còn Stream hay Timer nào chạy ngầm');
     super.dispose();
   }
 
@@ -134,7 +150,10 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
-              onChanged: _searchController.add, // mỗi lần gõ → đẩy vào Stream
+              onChanged: (text) {
+                // Đẩy ký tự vừa gõ vào Stream
+                _searchController.add(text);
+              },
             ),
           ),
           Expanded(
@@ -143,7 +162,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
               children: [
                 for (final task in visible)
                   StopwatchCard(
-                    key: ObjectKey(task),
+                    key: ValueKey(task.name),
                     task: task,
                     onChanged: () => setState(() {}),
                     onDelete: () => _removeStopwatch(task),
@@ -157,9 +176,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
   }
 }
 
-// =============================================================================
-// THẺ MỘT ĐỒNG HỒ
-// =============================================================================
+// Widget hiển thị từng thẻ đồng hồ
 class StopwatchCard extends StatelessWidget {
   const StopwatchCard({
     super.key,
@@ -185,8 +202,7 @@ class StopwatchCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(task.name),
-                  // STREAMBUILDER: tự lắng nghe stream và vẽ lại khi có số mới.
-                  // Khi thẻ bị gỡ khỏi màn hình, nó TỰ hủy subscription.
+                  // StreamBuilder tự động lắng nghe Stream và cập nhật UI khi có số mới
                   StreamBuilder<Duration>(
                     stream: task.stream,
                     initialData: task.elapsed,
@@ -195,7 +211,6 @@ class StopwatchCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
@@ -206,7 +221,11 @@ class StopwatchCard extends StatelessWidget {
               tooltip: task.isRunning ? 'Tạm dừng' : 'Chạy',
               icon: Icon(task.isRunning ? Icons.pause : Icons.play_arrow),
               onPressed: () {
-                task.isRunning ? task.pause() : task.start();
+                if (task.isRunning) {
+                  task.pause();
+                } else {
+                  task.start();
+                }
                 onChanged();
               },
             ),

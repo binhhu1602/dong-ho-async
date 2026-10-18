@@ -20,9 +20,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// MÀN HÌNH CHÍNH: 2 nút + nhật ký
-// =============================================================================
+// Màn hình chính
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -31,37 +29,39 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // EVENT LOOP & MICROTASK QUEUE
-  // Dart chạy theo thứ tự:
-  //   1. Code đồng bộ (chạy ngay)
-  //   2. Microtask Queue (ưu tiên cao, chạy hết rồi mới tới event)
-  //   3. Event Queue (Future, Timer…)
+  // Demo thứ tự chạy: Code đồng bộ -> Microtask Queue -> Event Queue
   void _runEventLoopDemo() {
     appLogs.clear();
-    log('--- EVENT LOOP DEMO ---');
+    log('--- THỬ NGHIỆM EVENT LOOP ---');
     log('1. Code đồng bộ: bắt đầu');
 
-    Future(() => log('5. Future() → Event Queue'));
-    Timer(Duration.zero, () => log('6. Timer(0) → Event Queue'));
-    scheduleMicrotask(() => log('3. scheduleMicrotask → Microtask Queue'));
-    Future.microtask(() => log('4. Future.microtask → Microtask Queue'));
+    // Đẩy vào Event Queue (độ ưu tiên sau Microtask)
+    Future(() => log('5. Future() -> Event Queue'));
+    Timer(Duration.zero, () => log('6. Timer(0) -> Event Queue'));
+
+    // Đẩy vào Microtask Queue (ưu tiên cao, chạy trước Event Queue)
+    scheduleMicrotask(() => log('3. scheduleMicrotask -> Microtask Queue'));
+    Future.microtask(() => log('4. Future.microtask -> Microtask Queue'));
 
     log('2. Code đồng bộ: kết thúc');
 
-    // Đợi các hàng đợi chạy xong rồi vẽ lại để xem kết quả.
+    // Chờ các hàng đợi chạy xong rồi cập nhật giao diện
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) setState(() {});
     });
   }
 
+  // Chuyển sang màn hình đồng hồ
   Future<void> _openStopwatches() async {
     appLogs.clear();
-    // AWAIT: chờ tới khi người dùng bấm Back quay về.
+
+    // Chờ người dùng thoát màn hình đồng hồ quay về
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const StopwatchScreen()),
     );
-    // Quay về rồi → vẽ lại để xem nhật ký dọn dẹp (dispose).
+
+    // Cập nhật lại giao diện để xem nhật ký dọn dẹp
     if (mounted) setState(() {});
   }
 
@@ -86,8 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Chạy thử Event Loop'),
             ),
             const SizedBox(height: 16),
-            const Text('Nhật ký:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Nhật ký:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Expanded(
               child: Container(

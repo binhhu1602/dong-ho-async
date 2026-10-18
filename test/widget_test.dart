@@ -1,30 +1,17 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dong_ho_async/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  // Kiểm thử giao diện màn hình chính
+  testWidgets('HomeScreen smoke test', (WidgetTester tester) async {
+    // Khởi tạo ứng dụng
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Kiểm tra các thành phần chính có hiển thị đầy đủ
+    expect(find.text('Future & Stream – Đồng hồ'), findsOneWidget);
+    expect(find.text('Mở đồng hồ bấm giờ'), findsOneWidget);
+    expect(find.text('Chạy thử Event Loop'), findsOneWidget);
+    expect(find.text('Nhật ký:'), findsOneWidget);
   });
 }
