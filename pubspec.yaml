@@ -1,0 +1,17 @@
+name: dong_ho_async
+description: Đồng hồ bấm giờ đa tác vụ - demo Future & Stream
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
